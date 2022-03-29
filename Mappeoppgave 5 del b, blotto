@@ -1,0 +1,68 @@
+import numpy as np
+import random as random
+
+def player_strategy(n_battalions,n_fields):
+    #defining the array:
+    battalions=np.zeros(n_fields,dtype=int)
+    
+#felter vi må vinne
+    N=n_fields/2
+
+    if N%1==0:
+        N+=1
+    else:
+        N+=0.5
+
+        
+    randomlist = random.sample(range(0, n_fields), int(N))
+    
+    #Først lager jeg hvor mange deler jeg vil ha battaljonene mine i
+    Deler=N+1
+    
+    #Her sørger jeg for at restbeløpet blir brukt og ikke forsvinner så jeg ikke får error på assert
+    
+    r=n_battalions%Deler
+    
+    #Trekker fra dette
+    battaljoner=n_battalions-r
+    
+    #Lager en ekstra variabel som er da den ekstra delen, som jeg senere fordeler der det er lite
+    ekstra=battaljoner/Deler
+    
+    battaljoner=battaljoner-ekstra
+    
+    #Her lager jeg at vi fordeler alle uten om 1 del på de ulike områdene
+    #Dette er bare en gjevn fordeling som fordeler det random på en over halvparten av territoriumene
+    u=0
+    while u<N:
+        y=randomlist[u]
+        battalions[y]=battaljoner/N
+        u+=1
+        
+    #legger til restbeløpet fra tidligere i en random plass i listen
+    battalions[random.choice(randomlist)]+=r
+    
+    #Her lager jeg bare en felt variabel
+    felter=n_fields-1
+    
+    #Setter x til noe random i feltene våre
+    x=random.randint(0,int(felter))
+    
+    #Lager en while løkke som sprer ekstra beløpet vårt rundt på brettet der det er minst.
+    #Velger at de som allerede har maks kan få en til battaljon lagt til for å gjøre det mer random.
+    while ekstra>0:
+        
+        if battalions[x] < battaljoner/N+1:
+            
+            battalions[x]+= 1
+            ekstra-= 1
+            x=random.randint(0,int(felter))
+        else:
+            x=random.randint(0,int(felter))
+        
+
+    
+    #asserting that all and no more than all battalions are used:
+    assert sum(battalions)==n_battalions
+    
+    return battalions
