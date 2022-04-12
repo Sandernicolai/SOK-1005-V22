@@ -1,0 +1,51 @@
+#Har lagt med csv filen jeg brukte for å laste aksje dataene til denne oppgaven. Den ligger i github i samme mappen
+#Jeg hadde den bare i samme mappe i jupiter
+
+import pandas as pd
+import numpy as np
+from matplotlib import pyplot as plt
+from bokeh.plotting import figure
+from bokeh.io import show, output_notebook
+from bokeh.plotting import output_file
+
+from bokeh.models import DatetimeTickFormatter
+import datetime
+
+Telenor = pd.read_csv("TEL.OL.csv", index_col=0, parse_dates=["Date"])
+
+fig,ax=plt.subplots()
+
+
+
+
+Telenor_plot = figure(
+        title = "Telenor kurs utvikling", 
+        x_axis_label = "Dato",
+        y_axis_label = "Dagens stengepris i nok",
+        
+        x_axis_type='datetime',
+        
+            
+        tools="hover", 
+        tooltips = [("Dagens kurs","@Date"), #Fikk ikke helt til her å få den til å vise datoene, det ble feil
+                    #etter jeg puttet inn parse dates for å få grafen til å virke.
+            ("Laveste kurs","@Low"),
+            ("Høyeste kurs","@High"),
+            ("Volum","@Volume"),
+             ],
+    
+        plot_height = 580,
+        plot_width = 980)
+        
+        
+        Telenor_plot.line(
+    source=Telenor,
+    x= 'Date', 
+    y= 'Close',
+    
+    alpha= 0.8
+    )
+
+output_notebook()
+output_file("Telenor_stock.html")
+show(Telenor_plot)
