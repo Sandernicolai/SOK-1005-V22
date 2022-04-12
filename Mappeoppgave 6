@@ -38,7 +38,7 @@ Telenor_plot = figure(
         plot_width = 980)
         
         
-        Telenor_plot.line(
+Telenor_plot.line(
     source=Telenor,
     x= 'Date', 
     y= 'Close',
