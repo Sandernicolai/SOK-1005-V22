@@ -1,0 +1,303 @@
+---
+title: "Prosjektoppgave Sok 1005"
+author: "Sander og Julia"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+## Introduksjon
+
+Når en bedrift ønsker å ekspandere har den ofte flere spennende prosjekter den ønsker å gå i gang med. Ofte så har den mange investeringer som man forutser vil bli lønnsomme. I den virkelige verden kan bedrifter oftest ikke prøve ut alt de ønsker. Bedrifter har ikke uendelig resurser. Det vil alltid være en begrensning på hvor mye kapital de har tilgang på, enten om det kommer fra egenkapital eller lån. Det er derfor viktig å kunne velge ut de beste investeringene med høyest avkastning for investorene blant flere investeringer. En måte å gjøre dette på, som vi skal se nærmere på i denne oppgaven, er å bruke historisk data hos eksisterende utsalgssteder og se hva som gjør de lønnsomme. Vi skal finne hvilke faktorer som gir en butikk bedre avkastning enn andre i tillegg til å finne hvor markedet er klare for nye utsalgssteder. 
+Dette skal vi gjøre ved å se på fortjenesten i de ulike fylkene, byene og utsalgsstedene og sammenligne det med data om befolkningen som bor i området her.
+
+```{r Oppgave 1, include=TRUE}
+
+library(dplyr)
+library(readr)
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(anytime)
+
+
+zip_url <- "https://md-datasets-cache-zipfiles-prod.s3.eu-west-1.amazonaws.com/6htjnfs78b-2.zip"
+download.file(zip_url,"data_zip")
+
+unzip("data_zip")
+
+Butikk_beskrivelse <- read.csv("AppWichStoreAttributes.csv")
+
+Fylke_kriminalitet <- read.csv("county_crime.csv")
+
+Fylke_demografi <- read.csv("county_demographic.csv")
+
+Fylke_arbeidsledighet <- read.csv("county_employment.csv")
+
+Ukentlig_salg <- read.csv("WEEKLY_SALES_10STORES.csv") 
+
+Ukentlig_vaer <- read.csv("WEEKLY_WEATHER.csv")
+
+
+#Bruker lubridate for å gjøre om string til dato.
+
+Ukentlig_vaer$Weather_Date <- lubridate::dmy(Ukentlig_vaer$Weather_Date)
+
+Ukentlig_salg$Date <-  lubridate::mdy(Ukentlig_salg$Date)
+
+
+#Her samler vi de datasettene med felles variabler. I fylkesdatasettene
+#Bruker vi County_Name
+#Deretter slår vi alt sammen til et stort dataframe
+
+
+Fylke_dataframe <- merge(cbind(Fylke_arbeidsledighet), 
+                         cbind(Fylke_demografi))
+
+Fylke_dataframe <- merge(cbind(Fylke_dataframe), 
+                         cbind(Fylke_kriminalitet))
+
+
+#Endrer navn for å matche colonne navn.
+
+Butikk_beskrivelse <- Butikk_beskrivelse %>% 
+  rename(County_Name = Store_County, Weather_Station = Store_Weather_Station)
+
+Ukentlig_vaer <- Ukentlig_vaer %>% 
+  rename(Date = Weather_Date)
+
+#Fjerner den ene kommaen fra leieanslaget 
+Butikk_beskrivelse$Annual_Rent_Estimate <- 
+  as.numeric(gsub(",","", Butikk_beskrivelse$Annual_Rent_Estimate))
+
+
+Ukentlig_salg <- Ukentlig_salg %>% 
+  rename(Store_Num = Store_num)
+
+
+Dataframe <- merge(Butikk_beskrivelse, Fylke_dataframe, by="County_Name")
+
+Dataframe <- merge(Dataframe, Ukentlig_salg, by="Store_Num")
+
+Dataframe <- merge(Dataframe, Ukentlig_vaer, by=c("Date","Weather_Station"), all=TRUE)
+
+```
+
+
+## Oppgave 1
+
+Det første som ble gjort i oppgaven var å laste ned alle dataen og sette sammen alle datasettene vi fikk presentert. Dette ga oss muligheten til å jobbe med et større datasett som beskrev hver enkelt butikk og salg bedre. Først lastet vi ned zip filen og leste av alle csv filene og lagret dem som separate datasett. Deretter endret vi datoene til datoformat som er lettere å jobbe med i r.
+
+For å slå sammen datasettene måtte vi finne felles variabler i datasettene og knytte de sammen etter disse variablene. Noen av variablene var like i datasettene, men hadde forskjellig kolonne navn. Dette fikset vi ved å endre disse navnene. Da vi gjorde alt dette fikk vi knyttet dataen vår om demografi, kriminalitet og mer med hvert enkelt salg. 
+
+
+## Oppgave 2
+
+Den ukentlige salgsrapporten inneholder data som viser til hendelser og transaksjoner som har skjedd for butikken i den gitte uken. Rapporten inneholder blant annet hvor mange handler og hvor mye salg butikkene har. Denne informasjonen brukes for å sammenligne hvordan butikken har gjort det i forhold til ukene før og etter. Med slike rapporter kan butikken raskt se om det er store avvik fra tidligere uker, slik at de raskt kan ta grep hvis det skulle være nødvendig.
+
+I en ukesrapport burde man ha med en oppsummering av salgstallene for uken og ukens spesifikke hendelser som været den uken. Det kan også være lurt å se på om vi har en nedgang eller oppgang i fortjeneste fra forrige uke. Vi valgte også å inkludere netto profitt.
+For å finne nettoprofitten til de forskjellige butikkene så tok vi verdien av den antatte årlige kostnaden og delte det på alle ukene i et år, altså 52. Dette ga oss et resultat med hva ca. kostnadene er på for hver uke, som vi kan trekke fra profitten for å få hva profitten faktisk er på. Vi kan ikke med sikkerhet si at butikkene ikke har flere kostnader, siden vi ikke har fått oppgitt hva de årlige kostnadene gjelder for. 
+
+Hvordan vi fant endringen fra forrige uke står beskrevet i koden. Her har vi laget et eksempel på en ukesrapport. Hvis man vil ha data fra andre uker eller butikker kan man endre variablene først.
+
+```{r Oppgave 2}
+#Lager uketall  og årstall i Dataframe
+Dataframe$Week_num <- lubridate::week(ymd(Dataframe$Date))
+
+#Her lager vi variabelen uketall og butikk nummer, slik at man kan endre dette og navnet på rapporten for å endre uke eller butikk. Vi la også inn "year" slik at dette vil virke dersom man putter inn salgstall for senere år enn det vi så langt har fått oppgitt.
+
+Week_number=2
+Butikk_nummer=2
+Year=2013
+
+Last_week=Week_number-1
+Last_Year=Year
+
+#Her lager jeg forrige uke og forrige år variabel
+#If funksjonen sjekker om det er første i året og endrer da til 52. uka og at
+#forrige år variabelen endrer året. Legg merke til at dersom det ikke er første perioden i året,
+#Så er "Last_year" fortsatt det samme året.
+#Alt dette gjør vi for å ta hensyn til hva skjer med siste variabelen dersom det er første uken i året.
+
+if (Week_number==1){
+  Last_week=52
+  Year=Last_Year-1
+}
+
+
+Salgsrapport <- 
+  Dataframe %>% 
+  filter(Week_num==Week_number, Store_Num==Butikk_nummer, Year==Year) %>% 
+  group_by(Store_Num) %>% 
+  summarize(Sales=sum(Sales), 
+            Cost=sum(Cost), 
+            Avrage_Cost_Percent=mean(Cost_Percent),
+            Profit=sum(Profit),
+            Net_Profit=as.integer(Profit)-as.integer(Annual_Rent_Estimate[1])/52,
+            Bad_Weather=Weather_Bad_Weather_Week[1],
+            Change_prosent_profit=(Profit-(
+              Dataframe %>% filter(Week_num==Last_week, Store_Num==Butikk_nummer, Year==Last_Year) %>%
+                summarize(sum(Profit))))/ (Dataframe %>% 
+              filter(Week_num==Last_week, Store_Num==Butikk_nummer, Year==Last_Year) %>% 
+                summarize(sum(Profit)))*100)
+
+#Her lager vi en salgsrapport som inneholder de viktigeste datene for uken. Først legger vi inn dataene for uken,
+#Deretter regner vi ut endringen fra forrige uke. Dette gjør vi ved å ta profitten denne uken, trekke fra profitten forrige uke og dele dette på profitten forrige uke.
+
+
+
+```
+
+## Oppgave 3
+
+Når vi skal lage en rapport til konsernet vil vi lage to rapporter. En med salgsdata fra hver enkelt utsalgssted, og en totalrapport. Her fokuserer vi på mye av det samme som tidligere. Vi har salgsdata og endringen fra forrige måned. Ofte i en slik langsiktig rapport kan det være lurt å se på salget i forhold til samme måned året før. Det kan vi ikke siden vi ikke har data på dette, men dette er også noe som lett kan legges inn i koden. 
+
+I totalrapporten kan ledelsen raskt se utviklingen fra forrige måned og hva profitten ble denne måneden. Her har vi laget en eksempel på begge disse rapportene.
+
+```{r Oppgave 3}
+
+Dataframe$Month_num <- lubridate::month(ymd(Dataframe$Date))
+
+
+#Her gjør vi det samme med at du kan velge hvilket år tallene gjelder for. Med denne formelen kan du velge måned og år her og det vil virke for en hvilken som helst måned du gir den data for.
+
+Month_number=2
+Year=2013
+
+Last_Month=Month_number-1
+Last_Year=Year
+
+#Her lager jeg forrige måned og forrige år variabel
+#If funksjonen sjekker om det er første i året og endrer da til 12. måned og at
+#forrige år variabelen endrer året. Legg merke til at dersom det ikke er første perioden i året,
+#Så er "Last_year" fortsatt det samme året.
+
+if (Month_number==1){
+  Last_Month=12
+  Year=Last_Year-1
+}
+
+
+Konsernrapport_butikker <- 
+  Dataframe %>% 
+  filter(Month_num==Month_number, Year==Year) %>% 
+  group_by(Store_Num) %>% 
+  summarize(Sales=sum(Sales), 
+            Cost=sum(Cost), 
+            Avrage_Cost_Percent=mean(Cost_Percent),
+            Profit=sum(Profit),
+            Net_Profit=as.integer(Profit)-as.integer(Annual_Rent_Estimate[1])/52,
+            Change_prosent_profit=(Profit-(
+              Dataframe %>% filter(Month_num==Last_Month,  Year==Last_Year) %>%
+                summarize(sum(Profit))))/ (Dataframe %>% 
+                                             filter(Month_num==Last_Month, Year==Last_Year) %>% 
+                                             summarize(sum(Profit)))*100)
+
+#------------------------------------------------------------------------------------------------
+
+
+Konsernrapport_Total <- 
+  Dataframe %>% 
+  filter(Month_num==Month_number, Year==Year) %>% 
+  summarize(Sales=sum(Sales), 
+            Cost=sum(Cost), 
+            Avrage_Cost_Percent=mean(Cost_Percent),
+            Profit=sum(Profit),
+            Net_Profit=as.integer(Profit)-as.integer(Annual_Rent_Estimate[1])/52,
+            Change_prosent_profit=(Profit-(
+              Dataframe %>% filter(Month_num==Last_Month,  Year==Last_Year) %>%
+                summarize(sum(Profit))))/ (Dataframe %>% 
+                                             filter(Month_num==Last_Month, Year==Last_Year) %>% 
+                                             summarize(sum(Profit)))*100)
+  
+  
+```
+
+
+## Oppgave 4
+
+
+```{r Oppgave 4 fylke}
+
+
+#Her tar vi først å regner sammen profitten i de ulike fylkene over perioden. Deretter slår jeg sammen dette nye fylkes-profitt datasettet med det datasettet om de ulike fylkene som vi lagde tidligere. 
+
+#Da vi har gjort dette kan jeg trekke ut de variablene jeg er interessert i å se på i de ulike fylkene, og sammenligne disse med profitten i fylket.
+
+Profitt_fylke <- Dataframe %>%
+  group_by(County_Name) %>% summarize(Profit=sum(Profit), Turn_over=sum(Sales))
+
+Profitt_fylke <-  merge(Profitt_fylke, Fylke_dataframe, by="County_Name")
+
+Profitt_fylke <- Profitt_fylke %>% 
+  select(County_Name,
+          County_Labor_Force, 
+          County_Unemployed, 
+          County_Crime_Pop,
+          County_Total_Census_Pop,
+         County_Unemployment_Rate,
+         County_Non.Hispanic_White,
+         County_Total_Crime_Rate,
+         Profit,
+         Turn_over)
+
+
+Profitt_fylke$Profitt_per_innbygger <-
+  Profitt_fylke$Profit/Profitt_fylke$County_Total_Census_Pop
+
+Profitt_fylke$Hvit_andel <-
+  Profitt_fylke$County_Non.Hispanic_White/Profitt_fylke$County_Total_Census_Pop
+
+Profitt_fylke$Margin <-
+  Profitt_fylke$Profit/Profitt_fylke$Turn_over*100
+
+#--------------------------------------------------------------------------------------------------
+
+Profitt_butikk <- Dataframe %>%
+  group_by(Store_Name) %>% summarize(Profit=sum(Profit))
+
+Profitt_butikk <-  merge(Profitt_butikk, Butikk_beskrivelse, by="Store_Name")
+
+Profitt_butikk <- Profitt_butikk %>% 
+  select(Store_Name,
+         Profit, 
+         Store_Drive_Through,
+         Store_Near_School,
+         Store_Competition_Fastfood,
+         Store_Competition_Otherfood,
+         Store_Traveller_Clients,
+         Annual_Rent_Estimate)
+
+Profitt_butikk$Profitt_per_leiekostnad <-Profitt_butikk$Profit/Profitt_butikk$Annual_Rent_Estimate
+
+Profitt_butikk$Profitt_per_konkuranse <- Profitt_butikk$Profit/(Profitt_butikk$Store_Competition_Fastfood+ Profitt_butikk$Store_Competition_Otherfood)
+
+```
+
+Først sammenligner vi dataene i de ulike fylkene for å lære mer om hvordan all dataen vi har fått om de ulike fylkene påvirker salgstallene. Dette gjør vi for å kunne se hvor det, utfra dataene vi har, lønner seg mest å starte en ny forretning.
+
+De ulike butikkene har veldig forskjellig størrelse, og for å kunne sammenligne disse med hverandre, og i tillegg ta hensyn til at noen fylker har flere butikker, valgte vi å ta profitten og dele på innbyggertallet i fylket. Da får vi se hvor mye de tjener per innbygger, og da se hvor populær butikken er i det gitte fylke. 
+
+Den neste variablene vi kan lage oss er å regne andelen av hvite ikke latinske befolkningen, altså den etnisk europeisk hvite befolkningen. Dette gjør vi fordi det er majoriteten i USA, og vi kan da se om minoriteter påvirker fortjenesten.
+
+Når vi regner ut slike variabler som den siste, så kan vi sammenligne det med profitten per innbygger og se om det påvirker utslagene positivt eller negativt. Når vi gjør dette og sammenligner profitten per innbygger og total kriminalitet i fylket, ser vi en tydelig sammenheng her. Vi har en lavere fortjeneste per innbygger i fylket jo mer kriminalitet det er der.
+
+Først kan vi se at Farm County er plassen med høyest profitt per innbygger. Dette typer på at butikken(e) er populære i dette fylket. Høy profitt per innbygger i tillegg til at profitten er høy kan tyde på at samfunnet her er modne for enda flere butikker. 
+
+Sorterer vi etter profitt kan vi tydelig se at etnisiteten til befolkningen i området spiller en stor rolle. Vi ser det at de tre fylkene med høyest profitt er også de med høyest andel hvite, lavest kriminalitet, høyest profitt per innbygger og lavest arbeidsledighet. Alt dette er faktorer vi da burde se etter når vi skal bygge nye butikker.
+
+Det er en nesten perfekt korrelasjon mellom rekkefølgen profitten og rekkefølgen på andel hvite i fylke, noe som viser oss at butikkene er mest populære blant den hvite befolkningen. Profitten per innbygger tar høyde for antall butikker vi har i fylket og hvor mange som bor der, og den viser det samme.
+Dette sier oss at det er definitivt lurest å bygge nye butikker i områder med en stor andel hvite.
+Vi ser også at salgsmarginene er ca den samme i alle fylkene, som sier oss at det er ingen demografiske faktorer som påvirker salgsmarginen vår.
+
+
+
+I det siste datasettet vi lager "Profitt_butikk" ser vi at University Town butikken er den med minst profitt. Til tross for dette ser vi at dette også er den butikken med høyest fortjeneste per leiekostnadene og at de har minst konkuranse. Dette tyder på at den er plassert hvor det er et dårlig marked for denne typen butikk.
+
+Vi ser at den mest profitable butikken treffer helt midt på treet i disse kategoriene. Dette fordi det er både høy konkurranse og leiekostnader. Dette viser oss at mye konkurranse i området og høye leiekostnader ikke har noen tydelig påvirkning på salget og fortjenesten. Altså det kan lønne seg å bygge i slike områder til tross for mange konkurrenter.
+
+Vi ser at den mest profitable butikken er den med større andel drive through kunder enn besøkende i butikken. Den andre butikken med samme kundegruppe er også en av de mest profitable. Dette kan være et tegn på at butikker som er plassert bra for slike kunder lønner seg.
+
+
+Oppsummert så kan vi konkludere med at områder med lav kriminalitet, lav arbeidsledighet, høy andel hvite og godt plassert i forhold til drive through er de mest lønnsomme plassene for å investere i en ny butikk. Vi har sett at konkurranse ikke har noen stor påvirkning på salget på vår butikk.
